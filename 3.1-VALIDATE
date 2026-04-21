@@ -1,0 +1,210 @@
+# Validate, ValidationError
+
+### Validate
+- Define o contrato de validação 
+
+### ValidationErrors
+- Representa um erro individual de campo
+
+````
+impl Validate for NewPayment {
+  fn validate(&self)-> Result<(), validator::ValidationErrors>{
+
+    let mut errors = validator::ValidationErrors::new();
+
+    if self.amount <= 0.0 {
+      errors.add("amount", ValidationError::new(
+        "Amount must be greater than zero."
+      ))
+    }
+
+    if self.current.trim().is_empty(){
+      errors.add("currency", ValidationError::new("Currency cannot be empty."))
+    }
+    
+    if self.payment_method != PaymentMethod::CreditCard
+      && self.payment_method != PaymentMethod::DebitCard
+      && self.payment_method != PaymentMethod::Money
+      && self.payment_method != PaymentMethod::Pix
+    {
+      errors.add("payment_method", ValidationError::new("Invalid payment method"));
+    }
+
+    if self.payment_reason.trim().is_empty() {
+      errors.add("payment_reason", ValidationError::new("Payment reason cannot be empty"));
+    }
+
+    if self.status != PaymentStatus::Pending
+      && self.status != PaymentStatus::Completed
+      && self.status != PaymentStatus::Failed
+    {
+      errors.add("status", ValidationError::new("Invalid payment status"));
+    }
+
+     if errors.is_empty() {
+      Ok(())
+    } else {
+      Err(errors)
+    }
+
+  }
+}
+````
+
+- impl Validate for NewPayment (NewPayment é a struct do model de payment)
+
+ Implementa uma validação para ´struct NewPayment´ e ensino rust com quero validar cada uma das variáveis da struct.
+
+- fn validator(&self)-> Result<(), validator::ValidatorErrors>
+
+ Função que executa todas as validações; retorna `Ok(())` se tudo válido, ou `Err(errors)` se houver falhas
+  
+ let mut errors  = validator::ValidationErrors::new()
+
+ Cria um local (Vec/Array) vazio onde se houver erros eles serão adicionados 
+
+- validações
+
+ ```
+  if self.valor que quero validar {
+   errors.add("nome da variável", ValidationError::new("mensagem de erro que será adicionada no let mut errors"));
+  }
+ ```
+
+- retorno 
+
+ ````
+  // Se nenhum erro foi adicionado, retorna sucesso
+   if errors.is_empty() {
+      Ok(())
+    } else {
+      // Caso contrário, retorna todos os erros coletados
+      Err(errors)
+    }
+ ````
+
+
+ 
+````
+// Importa o trait `Validate` (define o contrato de validação)
+// e `ValidationError` (representa um erro individual de campo)
+use validator::{Validate, ValidationError};
+
+// Importa os tipos que serão validados, vindo do módulo de models
+use crate::models::payment_model::{NewPayment, PaymentMethod, PaymentStatus};
+
+
+// Implementa manualmente o trait `Validate` para a struct `NewPayment`
+// Ou seja: ensina o Rust como validar esse tipo de dado
+impl Validate for NewPayment {
+
+  // Função que executa todas as validações
+  // Retorna `Ok(())` se tudo válido, ou `Err(errors)` se houver falhas
+  fn validate(&self) -> Result<(), validator::ValidationErrors> {
+
+    // Cria um "saco de erros" vazio — erros serão adicionados aqui
+    let mut errors = validator::ValidationErrors::new();
+
+    // Valida se o valor é positivo (pagamento não pode ser zero ou negativo)
+    if self.amount <= 0.0 {
+      // Adiciona um erro associado ao campo "amount"
+      errors.add("amount", ValidationError::new("Amount must be greater than zero"));
+    }
+
+    // `.trim()` remove espaços das bordas — `.is_empty()` checa se ficou vazio
+    // Impede que o usuário envie só espaços em branco como moeda
+    if self.currency.trim().is_empty() {
+      errors.add("currency", ValidationError::new("Currency cannot be empty"));
+    }
+
+    // Verifica se o método de pagamento é um dos valores permitidos
+    // Obs: essa checagem é redundante se PaymentMethod for um enum fechado —
+    // o Rust já impede valores fora do enum em tempo de compilação
+    if self.payment_method != PaymentMethod::CreditCard
+      && self.payment_method != PaymentMethod::DebitCard
+      && self.payment_method != PaymentMethod::Money
+      && self.payment_method != PaymentMethod::Pix
+    {
+      errors.add("payment_method", ValidationError::new("Invalid payment method"));
+    }
+
+    // Impede motivo do pagamento vazio ou só com espaços
+    if self.payment_reason.trim().is_empty() {
+      errors.add("payment_reason", ValidationError::new("Payment reason cannot be empty"));
+    }
+
+    // Mesma situação do payment_method — redundante com enum,
+    // mas válido se no futuro o status vier de uma fonte externa (ex: JSON cru)
+    if self.status != PaymentStatus::Pending
+      && self.status != PaymentStatus::Completed
+      && self.status != PaymentStatus::Failed
+    {
+      errors.add("status", ValidationError::new("Invalid payment status"));
+    }
+
+    // Se nenhum erro foi adicionado, retorna sucesso
+    if errors.is_empty() {
+      Ok(())
+    } else {
+      // Caso contrário, retorna todos os erros coletados
+      Err(errors)
+    }
+  }
+}
+````
+
+## Return de error
+
+````
+{
+  "amount": [{
+    "code": "Amount must be greater than zero", // ← virou code
+    "message": null,                             // ← null!
+    "params": {}
+  }]
+}
+````
+
+## Validator error com resposta mais completa
+
+### Return de error mais detalhado
+
+````
+{
+  "amount":[
+    {
+      "code": "invalid_amount", 
+      "message": "Amount must be greater than zero",
+      "params": {
+        "min": 0.01
+      }
+    }
+  ]
+}
+````
+
+````
+use validator::{Validate, ValidationError};
+use crate::models::payment::NewPayment;
+
+// Helper simples (error code e error message)
+// &'static str = string literal que vive para sempre em memória
+fn make_error(code: &'static str, message: &'static str) -> 
+ValidationError{
+  let mut error = ValidationError::new(code);
+   error.message = Some(message.into());  // .into() converte &str -> Cow
+  error // retorna o error construído
+}
+
+// Helper completo
+// &dyn serde::Serialize = aceita qualquer valor que possa virar JSON
+
+fn make_error_with_param(
+  code: &'static str,
+  message: &'static str,
+  param_key: &'static str,
+  param_value: &dyn serde::Serialize
+) -> ValidationError {
+  
+}
+````
