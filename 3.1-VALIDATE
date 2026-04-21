@@ -1,27 +1,25 @@
 # Validate, ValidationError
 
-### Validate
+### Validate 
 - Define o contrato de validação 
 
-### ValidationErrors
+### ValidationError 
 - Representa um erro individual de campo
 
 ````
-impl Validate for NewPayment {
+impl Validate for NewPayment{
   fn validate(&self)-> Result<(), validator::ValidationErrors>{
 
     let mut errors = validator::ValidationErrors::new();
 
     if self.amount <= 0.0 {
-      errors.add("amount", ValidationError::new(
-        "Amount must be greater than zero."
-      ))
+      errors.add("amount", ValidationError::new("Amount must be greater than zero."))
     }
 
     if self.current.trim().is_empty(){
       errors.add("currency", ValidationError::new("Currency cannot be empty."))
     }
-    
+
     if self.payment_method != PaymentMethod::CreditCard
       && self.payment_method != PaymentMethod::DebitCard
       && self.payment_method != PaymentMethod::Money
@@ -30,50 +28,44 @@ impl Validate for NewPayment {
       errors.add("payment_method", ValidationError::new("Invalid payment method"));
     }
 
-    if self.payment_reason.trim().is_empty() {
+     if self.payment_reason.trim().is_empty() {
       errors.add("payment_reason", ValidationError::new("Payment reason cannot be empty"));
     }
 
-    if self.status != PaymentStatus::Pending
+     if self.status != PaymentStatus::Pending
       && self.status != PaymentStatus::Completed
       && self.status != PaymentStatus::Failed
     {
       errors.add("status", ValidationError::new("Invalid payment status"));
     }
 
-     if errors.is_empty() {
+    if errors.is_empty() {
       Ok(())
     } else {
       Err(errors)
     }
-
   }
 }
 ````
 
-- impl Validate for NewPayment (NewPayment é a struct do model de payment)
+### impl Validate for NewPayment (NewPayment é a struct do model de payment)
+- Implemento um validação para a "struct NewPayment" e ensino rust como quero validar cada uma das variáveis da struct
 
- Implementa uma validação para ´struct NewPayment´ e ensino rust com quero validar cada uma das variáveis da struct.
+### fn validator(&self)-> Result<(), validator::ValidatorErrors>
+- Função que executa todas as validações; retorna `Ok(())` se tudo válido, ou `Err(errors)` se houver falhas
 
-- fn validator(&self)-> Result<(), validator::ValidatorErrors>
 
- Função que executa todas as validações; retorna `Ok(())` se tudo válido, ou `Err(errors)` se houver falhas
-  
- let mut errors  = validator::ValidationErrors::new()
+### let mut errors  = validator::ValidationErrors::new()
+- Cria um local vazio onde se houver erros eles serão adicionados 
 
- Cria um local (Vec/Array) vazio onde se houver erros eles serão adicionados 
 
-- validações
-
- ```
-  if self.valor que quero validar {
+### if self.valor que quero validar {
    errors.add("nome da variável", ValidationError::new("mensagem de erro que será adicionada no let mut errors"));
-  }
- ```
+}
 
-- retorno 
+### retorno 
 
- ````
+````
   // Se nenhum erro foi adicionado, retorna sucesso
    if errors.is_empty() {
       Ok(())
@@ -81,10 +73,9 @@ impl Validate for NewPayment {
       // Caso contrário, retorna todos os erros coletados
       Err(errors)
     }
- ````
+````
 
 
- 
 ````
 // Importa o trait `Validate` (define o contrato de validação)
 // e `ValidationError` (representa um erro individual de campo)
@@ -167,13 +158,12 @@ impl Validate for NewPayment {
 
 ## Validator error com resposta mais completa
 
-### Return de error mais detalhado
-
+## Return de error completo
 ````
 {
-  "amount":[
+  "amount": [
     {
-      "code": "invalid_amount", 
+      "code": "invalid_amount",
       "message": "Amount must be greater than zero",
       "params": {
         "min": 0.01
@@ -187,12 +177,14 @@ impl Validate for NewPayment {
 use validator::{Validate, ValidationError};
 use crate::models::payment::NewPayment;
 
+// Helpers 
+
 // Helper simples (error code e error message)
 // &'static str = string literal que vive para sempre em memória
 fn make_error(code: &'static str, message: &'static str) -> 
 ValidationError{
   let mut error = ValidationError::new(code);
-   error.message = Some(message.into());  // .into() converte &str -> Cow
+  error.message = Some(message.into());  // .into() converte &str → Cow
   error // retorna o error construído
 }
 
@@ -205,6 +197,125 @@ fn make_error_with_param(
   param_key: &'static str,
   param_value: &dyn serde::Serialize
 ) -> ValidationError {
-  
+  let mut error = ValidationError::new(code);
+  error.message = Some(message.into());
+  error.add_param(param_key.into(), param_value); // adiciona dado extra no erro
+
+  error
+}
+
+impl Validate for NewPayment {
+   fn validate(&self) -> Result<(), validator::ValidationErrors> {
+      let mut errors = validator::ValidationErrors::new();
+      
+      if self.amont <= 0.0 {
+        errors.add("amount", make_error_with_param(
+          "invalid_amount",   // code
+          "O valor do pagamento deve ser maior que zero.", // message
+          "min",  // param key
+          &0.01   // param value
+        ))
+      }
+
+      // currency — usa make_error pois é simples
+        if self.currency.trim().is_empty() {
+            errors.add("currency", make_error(
+                "invalid_currency",
+                "A moeda não pode ser vazia"
+            ));
+        }
+
+  }
+}
+````
+
+## Validator com Cow para manipular string
+
+````
+use validator::{Validate, ValidationError};
+use crate::models::payment::NewPayment;
+use std::borrow::Cow; // Cow = Copy on Write
+                      // string que só copia memória se precisar modificar
+                      // ideal para mensagens fixas de validação
+
+// Helper simples com Cow explícito
+fn make_error(code: &'static str, message: &'static str) -> ValidationError {
+    let mut error = ValidationError::new(code);
+    error.message = Some(Cow::from(message)); // Cow::from = referencia sem copiar
+    error
+}
+
+// Helper com parâmetro extra com Cow explícito
+fn make_error_with_param(
+    code: &'static str,
+    message: &'static str,
+    param_key: &'static str,
+    param_value: &dyn serde::Serialize
+) -> ValidationError {
+    let mut error = ValidationError::new(code);
+    error.message = Some(Cow::from(message));
+    error.add_param(Cow::from(param_key), param_value); // Cow::from no param_key também
+    error
+}
+
+impl Validate for NewPayment {
+    fn validate(&self) -> Result<(), validator::ValidationErrors> {
+        let mut errors = validator::ValidationErrors::new();
+
+        // amount — Cow::from na mensagem, sem alocação de memória
+        if self.amount <= 0.0 {
+            errors.add("amount", make_error_with_param(
+                "invalid_amount",
+                "O valor do pagamento deve ser maior que zero",
+                "min",
+                &0.01
+            ));
+        }
+
+        // currency — Cow::from internamente no make_error
+        if self.currency.trim().is_empty() {
+            errors.add("currency", make_error(
+                "invalid_currency",
+                "A moeda não pode ser vazia"
+            ));
+        }
+
+        // payment_method
+        if self.payment_method != PaymentMethod::CreditCard
+            && self.payment_method != PaymentMethod::DebitCard
+            && self.payment_method != PaymentMethod::Money
+            && self.payment_method != PaymentMethod::Pix
+        {
+            errors.add("payment_method", make_error(
+                "invalid_payment_method",
+                "Método de pagamento inválido"
+            ));
+        }
+
+        // payment_reason
+        if self.payment_reason.trim().is_empty() {
+            errors.add("payment_reason", make_error(
+                "invalid_payment_reason",
+                "O motivo do pagamento não pode ser vazio"
+            ));
+        }
+
+        // status
+        if self.status != PaymentStatus::Pending
+            && self.status != PaymentStatus::Completed
+            && self.status != PaymentStatus::Canceled
+        {
+            errors.add("status", make_error(
+                "invalid_status",
+                "Status de pagamento inválido"
+            ));
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
 }
 ````
