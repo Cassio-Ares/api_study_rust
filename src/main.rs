@@ -3,6 +3,14 @@ use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use dotenv::dotenv;
 use std::env;
 
+mod models;
+mod repositories;
+mod services;
+mod handlers;
+mod routes;
+mod validators;
+//mod tests;
+
 #[get("/hello")]
 async fn hello() -> impl Responder {
     "Hello world!"
@@ -23,6 +31,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(actix_web::web::Data::new(pool.clone()))
             .service(hello)
+            .configure(routes::payment_routes::config)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
