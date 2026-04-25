@@ -9,7 +9,7 @@ mod services;
 mod handlers;
 mod routes;
 mod validators;
-//mod tests;
+mod tests;
 
 #[get("/hello")]
 async fn hello() -> impl Responder {
